@@ -300,28 +300,64 @@ export default function App() {
   };
 
   const handleAIEnhance = () => {
-    if (!activeNote?.content) return;
+    if (!activeNote?.content || activeNote.content.length < 20) {
+      showNotification('Write more content to generate a summary', 'error');
+      return;
+    }
+
     setIsAiLoading(true);
+
+    // Simulated API call delay for realism
     setTimeout(async () => {
-      const aiSummary = `\n\n✨ AI Summary:\nThis note discusses ${activeNote.title || 'various topics'}. The content has been analyzed for clarity and key points.`;
       try {
+        const text = activeNote.content;
+
+        // 1. SMART BRIEF: Extract the first meaningful sentence or chunk
+        // Looks for the first period, question mark, or exclamation point
+        const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+        const rawBrief = sentences[0] || "No content found.";
+        const brief = rawBrief.length > 120 ? rawBrief.substring(0, 117) + "..." : rawBrief;
+
+        // 2. SMART TOPICS: Find unique words longer than 5 chars
+        const allWords = text.toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
+        const uniqueWords = [...new Set(allWords)];
+        // Capitalize and join the first 4 keywords
+        const keywords = uniqueWords
+          .slice(0, 4)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(', ');
+
+        // 3. READING TIME: Avg speed 200 words/min
+        const wordCount = text.split(/\s+/).length;
+        const readTime = Math.ceil(wordCount / 200);
+
+        const aiBlock = `
+
+---
+✨ **AI Insight**
+**Brief:** ${brief.trim()}
+**Key Topics:** ${keywords || 'General Notes'}
+**Est. Read Time:** ${readTime} min
+`;
+
         const noteRef = doc(db, 'users', user.uid, 'notes', activeNoteId);
-        const newTags = activeNote.tags.includes('AI Enhanced') 
+        const newTags = activeNote.tags?.includes('AI Enhanced') 
           ? activeNote.tags 
-          : [...activeNote.tags, 'AI Enhanced'];
+          : [...(activeNote.tags || []), 'AI Enhanced'];
 
         await updateDoc(noteRef, {
-          content: activeNote.content + aiSummary,
+          content: activeNote.content + aiBlock,
           tags: newTags,
           updatedAt: serverTimestamp()
         });
         showNotification('AI Analysis Complete');
       } catch (error) {
+        console.error("AI Error:", error);
         showNotification('AI Update Failed', 'error');
       } finally {
         setIsAiLoading(false);
       }
-    }, 1500);
+    }, 2000);
   };
 
   const showNotification = (msg, type = 'success') => {
